@@ -1,35 +1,39 @@
 ;;;
-;;; basic boot sector print characters using BIOS interrupts
+;;; Simple boot loader use INT13 AH2 to read from disk into memory
 ;;;
     org 0x7c00                  ; 'origin'
 
-    ;; set video mode
-    mov ah, 0x00                ; int 0x10/ ah 0x00 - set video mode
-    mov al, 0x03                ; 40x25 text mode
-    int 0x10
+    ;; setup ES:BX memory address/segment:offset to load sector(s) into
+    mov bx, 0x1000              ; load sector to memory addres 0x1000
+    mov es, bx
+    mov bx, 0x0                 ; memory address 0x1000:0x0
 
-    ;; change color/pallete
-    mov ah, 0x0B
-    mov bh, 0x00
-    mov bl, 0x01
-    int 0x10
+    ;; set up disk read
+    mov dh, 0x0                     ; head 0
+    mov dl, 0x0                     ; drive 0
+    mov ch, 0x0                     ; cylinder 0
+    mov cl, 0x02
 
-    ;; tele-type output strings
-    mov bx, testString
+read_disk:
+    mov ah, 0x02                    ; int 13/ah=02h, BIOS read disk sectors into memory
+    mov al, 0x01                    ; number of sectors we want to read ex. 1
+    int 0x13                        ; BIOS interrupt for disk functions
 
-    call print_string           ; call and return
-    mov bx, string2
-    call print_string
+    jc read_disk                    ; retry if disk read error (carry flag set to 1)
 
-    ;; halt
-    hlt                         ; halt the cpu
+    ;; reset segment register for RAM
+    mov ax, 0x1000
+    mov ds, ax                      ; data segment
+    mov es, ax                      ; extra segment
+    mov fs, ax                      ; -
+    mov gs, ax                      ; -
+    mov ss, ax                      ; stack segment
 
-    include 'print_string.asm'
+    jmp 0x1000:0x0
 
     ;; variables
-testString: db 'Test string', 0xA, 0xD, 0        ; null terminated string
-string2: db 'Hex string: 0x12AB', 0
 
+    ;; Boot sector magic
     times 510-($-$$) db 0
 
     dw 0xaa55                   ; BIOS magic number 
